@@ -7,7 +7,7 @@ const SOCIAL_START_MARKER = '<!-- CGB current-game social metadata: start -->';
 const SOCIAL_END_MARKER = '<!-- CGB current-game social metadata: end -->';
 
 function git(cwd, args) {
-  return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' }).trim();
+  return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' }).trimEnd();
 }
 
 export function pathIsAllowed(path) {
@@ -30,10 +30,16 @@ export function assertIndexDiffIsControlled(before, after) {
   }
 }
 
+export function statusPaths(porcelain) {
+  return String(porcelain || '')
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => line.slice(3).trim());
+}
+
 export async function validatePublicDiff(siteRoot) {
   const root = resolve(siteRoot);
-  const changed = git(root, ['status', '--porcelain=v1'])
-    .split(/\r?\n/).filter(Boolean).map((line) => line.slice(3).trim());
+  const changed = statusPaths(git(root, ['status', '--porcelain=v1']));
   const disallowed = changed.filter((path) => !pathIsAllowed(path));
   if (disallowed.length) throw new Error(`Refusing social refresh because disallowed public files changed: ${disallowed.join(', ')}`);
   if (changed.includes('index.html')) {
