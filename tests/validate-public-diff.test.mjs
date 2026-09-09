@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pathIsAllowed, assertIndexDiffIsControlled } from '../scripts/validate-public-diff.mjs';
+import { pathIsAllowed, assertIndexDiffIsControlled, statusPaths } from '../scripts/validate-public-diff.mjs';
 
 test('public social refresh allowlist is intentionally narrow', () => {
   assert.equal(pathIsAllowed('index.html'), true);
@@ -18,4 +18,11 @@ test('index validator allows only generated metadata and loading-cover reference
   const after = '<head>\n<!-- CGB current-game social metadata: start -->new<!-- CGB current-game social metadata: end -->\n<link id="cgb-loading-cover-preload" href="assets/social-cards/b.png">\n</head><body><img id="map-fallback-card" src="assets/social-cards/b.png"><main>same</main></body>';
   assert.doesNotThrow(() => assertIndexDiffIsControlled(before, after));
   assert.throws(() => assertIndexDiffIsControlled(before, after.replace('<main>same</main>', '<main>changed</main>')), /outside/);
+});
+
+test('porcelain parsing preserves paths for unstaged deletions and untracked files', () => {
+  assert.deepEqual(
+    statusPaths(' D assets/social-cards/old.png\n?? assets/social-cards/new.png\n'),
+    ['assets/social-cards/old.png', 'assets/social-cards/new.png']
+  );
 });
