@@ -1,0 +1,82 @@
+name: Refresh public social graphics
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cgb-public-social-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out refresh tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Syntax checks
+        run: npm run check:syntax
+
+      - name: Tooling tests
+        run: npm test
+
+      - name: Check out current public deployment
+        run: git clone --depth=1 https://github.com/calbearsquared2025/cal-bars.git .target
+
+      - name: Record reviewed public head
+        id: public-head
+        shell: bash
+        run: echo "sha=$(git -C .target rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Refresh generated social graphics
+        run: node scripts/refresh-social-graphics.mjs .target
+
+      - name: Validate social-only public diff
+        run: node scripts/validate-public-diff.mjs .target
+
+      - name: Verify public repository has not moved
+        env:
+          EXPECTED_PUBLIC_HEAD: ${{ steps.public-head.outputs.sha }}
+        run: |
+          git -C .target fetch origin main --depth=1
+          actual_public_head="$(git -C .target rev-parse FETCH_HEAD)"
+          if [ "$actual_public_head" != "$EXPECTED_PUBLIC_HEAD" ]; then
+            echo "::error::Public cal-bars/main changed while social graphics were being prepared. A later scheduled run will retry against the new deployment."
+            exit 1
+          fi
+
+      - name: Commit refreshed social outputs
+        id: commit
+        run: |
+          git -C .target add index.html assets/social-cards share
+          if git -C .target diff --cached --quiet; then
+            echo "Social graphics already match the current public snapshot."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git -C .target config user.name "github-actions[bot]"
+          git -C .target config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C .target commit -m "Refresh game social graphics"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Push social-only public update
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          PUBLIC_REPO_TOKEN: ${{ secrets.CGB_PUBLIC_DEPLOY_TOKEN }}
+        run: |
+          if [ -z "$PUBLIC_REPO_TOKEN" ]; then
+            echo "::error::Missing CGB_PUBLIC_DEPLOY_TOKEN repository secret."
+            exit 1
+          fi
+          git -C .target push "https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/calbearsquared2025/cal-bars.git" HEAD:main

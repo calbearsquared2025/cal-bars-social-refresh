@@ -1,0 +1,10 @@
+{
+  "name": "cal-bars-social-refresh",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check:syntax": "node --check scripts/browser-discovery.mjs && node --check scripts/refresh-social-graphics.mjs && node --check scripts/validate-public-diff.mjs",
+    "test": "node --test tests/*.test.mjs"
+  }
+}

@@ -1,0 +1,44 @@
+name: Test social refresh tooling
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Syntax checks
+        run: npm run check:syntax
+      - name: Unit tests
+        run: npm test
+      - name: Check out current public deployment
+        run: git clone --depth=1 https://github.com/calbearsquared2025/cal-bars.git .target
+      - name: Dry-run refresh against live public snapshot
+        run: node scripts/refresh-social-graphics.mjs .target
+      - name: Validate dry-run public diff
+        run: node scripts/validate-public-diff.mjs .target
+      - name: Verify fingerprinted card URLs
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          const manifest = JSON.parse(await readFile('.target/assets/social-cards/manifest.json', 'utf8'));
+          if (!manifest.games?.length) throw new Error('Dry-run manifest contains no games.');
+          for (const game of manifest.games) {
+            if (!/^assets\/social-cards\/[^/]+-[a-f0-9]{10}\.png$/.test(game.image || '')) {
+              throw new Error(`Expected fingerprinted social image path, got: ${game.image}`);
+            }
+          }
+          console.log(`Validated ${manifest.games.length} fingerprinted social image paths.`);
+          NODE
