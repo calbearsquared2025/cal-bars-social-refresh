@@ -18,15 +18,12 @@ function normalizeControlledIndexRegions(html) {
   const blockPattern = new RegExp(`${SOCIAL_START_MARKER}[\\s\\S]*?${SOCIAL_END_MARKER}`);
   if (!blockPattern.test(html)) throw new Error('index.html is missing the generated social metadata markers.');
   let normalized = html.replace(blockPattern, `${SOCIAL_START_MARKER}\n${SOCIAL_END_MARKER}`);
-  const preloadPattern = /(<link\b[^>]*\bid="cgb-loading-cover-preload"[^>]*\bhref=")[^"]*(")/i;
-  const imagePattern = /(<img\b[^>]*\bid="map-fallback-card"[^>]*\bsrc=")[^"]*(")/i;
-  if (!preloadPattern.test(normalized) || !imagePattern.test(normalized)) throw new Error('index.html is missing the loading cover hooks.');
-  return normalized.replace(preloadPattern, '$1__SOCIAL_IMAGE__$2').replace(imagePattern, '$1__SOCIAL_IMAGE__$2');
+  return normalized;
 }
 
 export function assertIndexDiffIsControlled(before, after) {
   if (normalizeControlledIndexRegions(before) !== normalizeControlledIndexRegions(after)) {
-    throw new Error('index.html changed outside the generated social metadata or loading-cover references.');
+    throw new Error('index.html changed outside the generated social metadata.');
   }
 }
 

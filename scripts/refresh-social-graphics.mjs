@@ -281,7 +281,14 @@ export function buildSharePage(model, runtime) {
 </head>
 <body>
   <p>Opening <a href="${appPath}">${escapeHtml(model.title)}</a>…</p>
-  <script>window.location.replace(${JSON.stringify(appPath)});</script>
+  <script>
+    (() => {
+      const destination = new URL(${JSON.stringify(appPath)}, window.location.href);
+      const venue = new URLSearchParams(window.location.search).get('venue');
+      if (venue) destination.searchParams.set('venue', venue);
+      window.location.replace(destination.href);
+    })();
+  </script>
 </body>
 </html>
 `;
@@ -302,11 +309,6 @@ export function updateRootSocialPreview(html, manifest, runtime) {
   const generatedPattern = new RegExp(`${SOCIAL_START_MARKER}[\\s\\S]*?${SOCIAL_END_MARKER}`);
   if (!generatedPattern.test(html)) throw new Error('Could not find the generated root social metadata block in index.html.');
   let updated = html.replace(generatedPattern, block);
-  const imagePath = escapeHtml(entry.image);
-  const preloadPattern = /(<link\b[^>]*\bid="cgb-loading-cover-preload"[^>]*\bhref=")[^"]*(")/i;
-  const imagePattern = /(<img\b[^>]*\bid="map-fallback-card"[^>]*\bsrc=")[^"]*(")/i;
-  if (!preloadPattern.test(updated) || !imagePattern.test(updated)) throw new Error('Could not find the current-game loading cover hooks in index.html.');
-  updated = updated.replace(preloadPattern, `$1${imagePath}$2`).replace(imagePattern, `$1${imagePath}$2`);
   return updated;
 }
 
