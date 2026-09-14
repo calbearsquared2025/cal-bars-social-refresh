@@ -281,7 +281,14 @@ export function buildSharePage(model, runtime) {
 </head>
 <body>
   <p>Opening <a href="${appPath}">${escapeHtml(model.title)}</a>…</p>
-  <script>window.location.replace(${JSON.stringify(appPath)});</script>
+  <script>
+    (() => {
+      const destination = new URL(${JSON.stringify(appPath)}, window.location.href);
+      const venue = new URLSearchParams(window.location.search).get('venue');
+      if (venue) destination.searchParams.set('venue', venue);
+      window.location.replace(destination.href);
+    })();
+  </script>
 </body>
 </html>
 `;
