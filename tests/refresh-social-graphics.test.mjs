@@ -18,6 +18,42 @@ test('snapshot fetch retries transient errors and preserves validation', async (
   assert.equal(result, snapshot);
 });
 
+test('snapshot fetch retries request timeouts', async () => {
+  let calls = 0;
+  const snapshot = { games: [], venues: [], watchParties: [] };
+  const result = await fetchSnapshot('https://example.invalid', (value) => value, {
+    attempts: 2,
+    retryDelaysMs: [0],
+    fetchImpl: async () => {
+      calls += 1;
+      if (calls === 1) {
+        const error = new Error('aborted');
+        error.name = 'AbortError';
+        throw error;
+      }
+      return { ok: true, json: async () => snapshot };
+    }
+  });
+  assert.equal(calls, 2);
+  assert.equal(result, snapshot);
+});
+
+test('snapshot fetch retries transient Apps Script 404s', async () => {
+  let calls = 0;
+  const snapshot = { games: [], venues: [], watchParties: [] };
+  const result = await fetchSnapshot('https://script.google.com/macros/s/test/exec', (value) => value, {
+    attempts: 2,
+    retryDelaysMs: [0],
+    fetchImpl: async () => {
+      calls += 1;
+      if (calls === 1) return { ok: false, status: 404 };
+      return { ok: true, json: async () => snapshot };
+    }
+  });
+  assert.equal(calls, 2);
+  assert.equal(result, snapshot);
+});
+
 test('snapshot fetch does not retry permanent client errors', async () => {
   let calls = 0;
   await assert.rejects(() => fetchSnapshot('https://example.invalid', (value) => value, {
@@ -31,6 +67,9 @@ test('snapshot fetch does not retry permanent client errors', async () => {
 test('automation contract keeps the current renderer version explicit', async () => {
   const source = await import('node:fs/promises').then(({ readFile }) => readFile(new URL('../scripts/refresh-social-graphics.mjs', import.meta.url), 'utf8'));
   assert.match(source, /RENDERER_VERSION = 8/);
+  assert.match(source, /SNAPSHOT_FETCH_TIMEOUT_MS = 30_000/);
+  assert.match(source, /SNAPSHOT_FETCH_ATTEMPTS = 4/);
+  assert.match(source, /SNAPSHOT_RETRY_DELAYS_MS = \[1_000, 2_500, 5_000\]/);
   assert.match(source, /does not match automation renderer version/);
 });
 
