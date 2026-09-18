@@ -42,6 +42,16 @@ function retryableSnapshotError(message) {
   return error;
 }
 
+function isRetryableSnapshotHttpStatus(endpoint, status) {
+  let isAppsScriptEndpoint = false;
+  try {
+    isAppsScriptEndpoint = new URL(endpoint).hostname === 'script.google.com';
+  } catch (_) {
+    // Endpoint validation happens before production calls; malformed test inputs are non-Apps-Script.
+  }
+  return status === 408 || status === 429 || status >= 500 || (status === 404 && isAppsScriptEndpoint);
+}
+
 async function fetchSnapshotAttempt(endpoint, validateSnapshot, {
   fetchImpl = fetch,
   timeoutMs = SNAPSHOT_FETCH_TIMEOUT_MS
@@ -58,7 +68,7 @@ async function fetchSnapshotAttempt(endpoint, validateSnapshot, {
     }
     if (!response.ok) {
       const error = new Error(`HTTP ${response.status}`);
-      error.retryable = response.status === 408 || response.status === 429 || response.status >= 500;
+      error.retryable = isRetryableSnapshotHttpStatus(endpoint, response.status);
       throw error;
     }
     let snapshot;
