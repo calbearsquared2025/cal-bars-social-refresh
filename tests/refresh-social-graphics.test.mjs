@@ -38,6 +38,22 @@ test('snapshot fetch retries request timeouts', async () => {
   assert.equal(result, snapshot);
 });
 
+test('snapshot fetch retries transient Apps Script 404s', async () => {
+  let calls = 0;
+  const snapshot = { games: [], venues: [], watchParties: [] };
+  const result = await fetchSnapshot('https://script.google.com/macros/s/test/exec', (value) => value, {
+    attempts: 2,
+    retryDelaysMs: [0],
+    fetchImpl: async () => {
+      calls += 1;
+      if (calls === 1) return { ok: false, status: 404 };
+      return { ok: true, json: async () => snapshot };
+    }
+  });
+  assert.equal(calls, 2);
+  assert.equal(result, snapshot);
+});
+
 test('snapshot fetch does not retry permanent client errors', async () => {
   let calls = 0;
   await assert.rejects(() => fetchSnapshot('https://example.invalid', (value) => value, {
