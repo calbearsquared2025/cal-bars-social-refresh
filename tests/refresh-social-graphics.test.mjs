@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchSnapshot, socialCardModel } from '../scripts/refresh-social-graphics.mjs';
+import { fetchSnapshot, socialCardModel, updateRootSocialPreview } from '../scripts/refresh-social-graphics.mjs';
 
 test('snapshot fetch retries transient errors and preserves validation', async () => {
   let calls = 0;
@@ -62,6 +62,38 @@ test('snapshot fetch does not retry permanent client errors', async () => {
     fetchImpl: async () => { calls += 1; return { ok: false, status: 404 }; }
   }), /HTTP 404/);
   assert.equal(calls, 1);
+});
+
+test('root preview keeps the visible loading cover synchronized with the default game', () => {
+  const runtime = {
+    siteOrigin: 'https://calgoldenbars.com',
+    config: {
+      identity: { productName: 'Cal Golden Bars' },
+      copy: { findCrowd: 'Find your Cal crowd' }
+    }
+  };
+  const manifest = {
+    default_game_slug: 'unlv',
+    games: [{
+      slug: 'unlv',
+      title: 'Cal at UNLV',
+      locations_mapped: 45,
+      watch_parties: 10,
+      image: 'assets/social-cards/unlv-50d9a6c596.png'
+    }]
+  };
+  const html = `<head>
+<!-- CGB current-game social metadata: start -->old<!-- CGB current-game social metadata: end -->
+<link id="cgb-loading-cover-preload" rel="preload" as="image" href="assets/social-cards/clemson-523e8f106d.png">
+</head><body>
+<img id="map-fallback-card" src="assets/social-cards/clemson-523e8f106d.png" alt="">
+</body>`;
+  const updated = updateRootSocialPreview(html, manifest, runtime);
+
+  assert.match(updated, /<meta property="og:title" content="Cal Golden Bars · Cal at UNLV">/);
+  assert.match(updated, /id="cgb-loading-cover-preload"[^>]*href="assets\/social-cards\/unlv-50d9a6c596\.png"/i);
+  assert.match(updated, /id="map-fallback-card"[^>]*src="assets\/social-cards\/unlv-50d9a6c596\.png"/i);
+  assert.doesNotMatch(updated, /clemson-523e8f106d\.png/);
 });
 
 test('automation contract keeps the current renderer version explicit', async () => {
