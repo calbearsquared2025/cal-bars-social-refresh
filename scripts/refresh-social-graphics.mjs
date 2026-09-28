@@ -313,8 +313,8 @@ function socialMetadataBlock(entry, runtime) {
 
 export function updateLoadingCover(html, entry) {
   const imagePath = escapeHtml(entry.image);
-  const preloadPattern = /(<link\\b[^>]*\\bid=["']cgb-loading-cover-preload["'][^>]*\\bhref=")[^"]*(")/i;
-  const imagePattern = /(<img\\b[^>]*\\bid=["']map-fallback-card["'][^>]*\\bsrc=")[^"]*(")/i;
+  const preloadPattern = /(<link\b[^>]*\bid=["']cgb-loading-cover-preload["'][^>]*\bhref=")[^"]*(")/i;
+  const imagePattern = /(<img\b[^>]*\bid=["']map-fallback-card["'][^>]*\bsrc=")[^"]*(")/i;
   if (!preloadPattern.test(html) || !imagePattern.test(html)) {
     throw new Error('Could not find the current-game loading cover hooks in index.html.');
   }
