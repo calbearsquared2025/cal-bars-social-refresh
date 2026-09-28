@@ -14,9 +14,9 @@ export function pathIsAllowed(path) {
   return path === 'index.html' || path === 'assets/social-cards/manifest.json' || /^assets\/social-cards\/[^/]+\.png$/.test(path) || /^share\/[^/]+\/index\.html$/.test(path);
 }
 
-const FINGERPRINTED_SOCIAL_IMAGE_PATTERN = /^assets\\/social-cards\\/[^/]+-[a-f0-9]{10}\\.png$/;
-const PRELOAD_PATTERN = /(<link\\b[^>]*\\bid=["']cgb-loading-cover-preload["'][^>]*\\bhref=")([^"]*)(")/i;
-const IMAGE_PATTERN = /(<img\\b[^>]*\\bid=["']map-fallback-card["'][^>]*\\bsrc=")([^"]*)(")/i;
+const FINGERPRINTED_SOCIAL_IMAGE_PATTERN = /^assets\/social-cards\/[^/]+-[a-f0-9]{10}\.png$/;
+const PRELOAD_PATTERN = /(<link\b[^>]*\bid=["']cgb-loading-cover-preload["'][^>]*\bhref=")([^"]*)(")/i;
+const IMAGE_PATTERN = /(<img\b[^>]*\bid=["']map-fallback-card["'][^>]*\bsrc=")([^"]*)(")/i;
 
 function loadingCoverReferences(html) {
   const preload = html.match(PRELOAD_PATTERN)?.[2] || '';
