@@ -14,16 +14,37 @@ export function pathIsAllowed(path) {
   return path === 'index.html' || path === 'assets/social-cards/manifest.json' || /^assets\/social-cards\/[^/]+\.png$/.test(path) || /^share\/[^/]+\/index\.html$/.test(path);
 }
 
+const FINGERPRINTED_SOCIAL_IMAGE_PATTERN = /^assets\/social-cards\/[^/]+-[a-f0-9]{10}\.png$/;
+const PRELOAD_PATTERN = /(<link\b[^>]*\bid=["']cgb-loading-cover-preload["'][^>]*\bhref=")([^"]*)(")/i;
+const IMAGE_PATTERN = /(<img\b[^>]*\bid=["']map-fallback-card["'][^>]*\bsrc=")([^"]*)(")/i;
+
+function loadingCoverReferences(html) {
+  const preload = html.match(PRELOAD_PATTERN)?.[2] || '';
+  const image = html.match(IMAGE_PATTERN)?.[2] || '';
+  if (!preload || !image) throw new Error('index.html is missing the generated loading-cover references.');
+  return { preload, image };
+}
+
 function normalizeControlledIndexRegions(html) {
   const blockPattern = new RegExp(`${SOCIAL_START_MARKER}[\\s\\S]*?${SOCIAL_END_MARKER}`);
   if (!blockPattern.test(html)) throw new Error('index.html is missing the generated social metadata markers.');
-  let normalized = html.replace(blockPattern, `${SOCIAL_START_MARKER}\n${SOCIAL_END_MARKER}`);
-  return normalized;
+  loadingCoverReferences(html);
+  return html
+    .replace(blockPattern, `${SOCIAL_START_MARKER}\n${SOCIAL_END_MARKER}`)
+    .replace(PRELOAD_PATTERN, '$1__CGB_LOADING_COVER__$3')
+    .replace(IMAGE_PATTERN, '$1__CGB_LOADING_COVER__$3');
 }
 
 export function assertIndexDiffIsControlled(before, after) {
+  const { preload, image } = loadingCoverReferences(after);
+  if (!FINGERPRINTED_SOCIAL_IMAGE_PATTERN.test(preload) || !FINGERPRINTED_SOCIAL_IMAGE_PATTERN.test(image)) {
+    throw new Error('Generated loading-cover references must use fingerprinted social-card images.');
+  }
+  if (preload !== image) {
+    throw new Error('Generated loading-cover preload and visible image must stay synchronized.');
+  }
   if (normalizeControlledIndexRegions(before) !== normalizeControlledIndexRegions(after)) {
-    throw new Error('index.html changed outside the generated social metadata.');
+    throw new Error('index.html changed outside the generated social metadata and loading-cover references.');
   }
 }
 

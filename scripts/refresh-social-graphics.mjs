@@ -311,6 +311,18 @@ function socialMetadataBlock(entry, runtime) {
   return `${SOCIAL_START_MARKER}\n  <meta property="og:title" content="${escapeHtml(title)}">\n  <meta property="og:description" content="${escapeHtml(description)}">\n  <meta property="og:image" content="${escapeHtml(imageUrl)}">\n  <meta property="og:image:width" content="1200">\n  <meta property="og:image:height" content="630">\n  <meta property="og:url" content="${runtime.siteOrigin}/">\n  <meta property="og:type" content="website">\n  <meta name="twitter:card" content="summary_large_image">\n  <meta name="twitter:title" content="${escapeHtml(title)}">\n  <meta name="twitter:description" content="${escapeHtml(description)}">\n  <meta name="twitter:image" content="${escapeHtml(imageUrl)}">\n  ${SOCIAL_END_MARKER}`;
 }
 
+export function updateLoadingCover(html, entry) {
+  const imagePath = escapeHtml(entry.image);
+  const preloadPattern = /(<link\b[^>]*\bid=["']cgb-loading-cover-preload["'][^>]*\bhref=")[^"]*(")/i;
+  const imagePattern = /(<img\b[^>]*\bid=["']map-fallback-card["'][^>]*\bsrc=")[^"]*(")/i;
+  if (!preloadPattern.test(html) || !imagePattern.test(html)) {
+    throw new Error('Could not find the current-game loading cover hooks in index.html.');
+  }
+  return html
+    .replace(preloadPattern, `$1${imagePath}$2`)
+    .replace(imagePattern, `$1${imagePath}$2`);
+}
+
 export function updateRootSocialPreview(html, manifest, runtime) {
   const slug = String(manifest?.default_game_slug || '').trim();
   const entry = (manifest.games || []).find((item) => item?.slug === slug);
@@ -318,8 +330,8 @@ export function updateRootSocialPreview(html, manifest, runtime) {
   const block = socialMetadataBlock(entry, runtime);
   const generatedPattern = new RegExp(`${SOCIAL_START_MARKER}[\\s\\S]*?${SOCIAL_END_MARKER}`);
   if (!generatedPattern.test(html)) throw new Error('Could not find the generated root social metadata block in index.html.');
-  let updated = html.replace(generatedPattern, block);
-  return updated;
+  const metadataUpdated = html.replace(generatedPattern, block);
+  return updateLoadingCover(metadataUpdated, entry);
 }
 
 async function readPreviousManifest(manifestPath) {
