@@ -158,4 +158,6 @@ test('fallback snapshot rejects unexpected public fields', () => {
     generatedAt: '2026-10-01T00:00:00Z'
   };
   assert.throws(() => publicFallbackSnapshot(snapshot), /unexpected public fields: secret/);
+  const topLevel = { ...snapshot, venues: [], privateThing: 'nope' };
+  assert.throws(() => publicFallbackSnapshot(topLevel), /snapshot contains unexpected public fields: privateThing/);
 });
