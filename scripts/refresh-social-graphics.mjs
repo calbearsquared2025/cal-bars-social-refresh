@@ -368,9 +368,98 @@ async function canReuseCard(previousManifest, model, outputPath) {
   try { await assertPngDimensions(outputPath); return true; } catch (_) { return false; }
 }
 
+
+const FALLBACK_TOP_LEVEL_KEYS = Object.freeze([
+  'schemaVersion', 'venues', 'games', 'watchParties', 'fanCounts',
+  'venueHistoryCounts', 'venueSeasonCounts', 'fanExperiences', 'generatedAt'
+]);
+const FALLBACK_ROW_KEYS = Object.freeze({
+  venues: Object.freeze([
+    'venue_id', 'slug', 'name', 'address_line_1', 'address_line_2', 'city', 'region',
+    'postal_code', 'country_code', 'latitude', 'longitude', 'website_url', 'venue_type',
+    'verification_status', 'alumni_owned', 'short_description', 'photo_url',
+    'photo_caption', 'photo_credit', 'photo_credit_url', 'updated_at', 'venue_tags'
+  ]),
+  games: Object.freeze([
+    'game_id', 'season', 'schedule_order', 'opponent_name', 'home_away',
+    'game_date', 'kickoff_at', 'kickoff_status', 'game_status', 'updated_at'
+  ]),
+  watchParties: Object.freeze([
+    'watch_party_id', 'venue_id', 'game_id', 'organizer_name', 'organizer_type',
+    'official_event_url', 'source_type', 'event_start_at', 'age_policy', 'sound_status',
+    'restrictions_note', 'game_day_note', 'event_status', 'updated_at', 'feature_tags'
+  ]),
+  fanCounts: Object.freeze(['game_id', 'venue_id', 'count']),
+  venueHistoryCounts: Object.freeze(['venue_id', 'past_game_count']),
+  venueSeasonCounts: Object.freeze(['season', 'venue_id', 'count']),
+  fanExperiences: Object.freeze(['venue_id', 'text', 'display_name', 'year'])
+});
+
+function assertAllowedObjectKeys(record, allowedKeys, path) {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) {
+    throw new Error(`Refusing fallback refresh because ${path} is not an object.`);
+  }
+  const allowed = new Set(allowedKeys);
+  const unexpected = Object.keys(record).filter((key) => !allowed.has(key));
+  if (unexpected.length) {
+    throw new Error(`Refusing fallback refresh because ${path} contains unexpected public fields: ${unexpected.join(', ')}`);
+  }
+}
+
+export function publicFallbackSnapshot(snapshot) {
+  assertAllowedObjectKeys(snapshot, FALLBACK_TOP_LEVEL_KEYS, 'snapshot');
+  const sanitized = {};
+  for (const key of FALLBACK_TOP_LEVEL_KEYS) {
+    if (!(key in snapshot)) {
+      if (key === 'venueSeasonCounts' || key === 'fanExperiences') sanitized[key] = [];
+      else throw new Error(`Refusing fallback refresh because the public snapshot is missing ${key}.`);
+    } else {
+      sanitized[key] = snapshot[key];
+    }
+  }
+
+  for (const [key, allowedKeys] of Object.entries(FALLBACK_ROW_KEYS)) {
+    const rows = sanitized[key];
+    if (!Array.isArray(rows)) throw new Error(`Refusing fallback refresh because ${key} is not an array.`);
+    rows.forEach((row, index) => assertAllowedObjectKeys(row, allowedKeys, `${key}[${index}]`));
+  }
+  return sanitized;
+}
+
+function fallbackComparable(snapshot) {
+  const copy = { ...snapshot };
+  delete copy.generatedAt;
+  return JSON.stringify(copy);
+}
+
+export function publicFallbackContentsDiffer(current, next) {
+  if (!current || typeof current !== 'object') return true;
+  return fallbackComparable(current) !== fallbackComparable(next);
+}
+
+async function refreshPublicFallback(runtime, snapshot) {
+  const relativePath = String(runtime.config.integrations.resources.fallbackSnapshotPath || '').trim();
+  if (relativePath !== 'data/fallback-v2.json') {
+    throw new Error(`Refusing unexpected public fallback path: ${relativePath || '(missing)'}`);
+  }
+  const fallbackPath = resolve(runtime.root, relativePath);
+  const next = publicFallbackSnapshot(snapshot);
+  let current = null;
+  try {
+    current = JSON.parse(await readFile(fallbackPath, 'utf8'));
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw new Error(`Could not read the deployed public fallback: ${error.message}`);
+  }
+  if (!publicFallbackContentsDiffer(current, next)) return false;
+  await mkdir(dirname(fallbackPath), { recursive: true });
+  await writeFile(fallbackPath, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+  return true;
+}
+
 export async function generateSocialGraphics(siteRoot, options = {}) {
   const runtime = await loadPublicRuntime(siteRoot);
   const snapshot = await fetchSnapshot(runtime.endpoint, (value) => validateSocialSnapshot(value, runtime.core), options);
+  const fallbackChanged = await refreshPublicFallback(runtime, snapshot);
   const models = sortGames(snapshot.games).map((game) => socialCardModel(snapshot, game, runtime));
   if (!models.length) throw new Error('The public snapshot contains no games to generate.');
   const cardRoot = join(runtime.root, runtime.config.brand.assets.socialCardsDirectory);
@@ -402,7 +491,7 @@ export async function generateSocialGraphics(siteRoot, options = {}) {
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
     const updatedIndex = updateRootSocialPreview(runtime.indexHtml, manifest, runtime);
     if (updatedIndex !== runtime.indexHtml) await writeFile(join(runtime.root, 'index.html'), updatedIndex, 'utf8');
-    return { snapshot, manifest };
+    return { snapshot, manifest, fallbackChanged };
   } finally {
     if (temporaryDirectory) await rm(temporaryDirectory, { recursive: true, force: true });
   }
@@ -415,8 +504,9 @@ if (import.meta.url === invokedPath) {
     console.error('Usage: node scripts/refresh-social-graphics.mjs <public-site-root>');
     process.exitCode = 2;
   } else {
-    generateSocialGraphics(siteRoot).then(({ manifest }) => {
-      console.log(`Refreshed ${manifest.games.length} game social card${manifest.games.length === 1 ? '' : 's'} from the public snapshot.`);
+    generateSocialGraphics(siteRoot).then(({ manifest, fallbackChanged }) => {
+      const fallbackNote = fallbackChanged ? ' and the deployed public fallback' : '';
+      console.log(`Refreshed ${manifest.games.length} game social card${manifest.games.length === 1 ? '' : 's'}${fallbackNote} from the public snapshot.`);
     }).catch((error) => {
       console.error(`Social refresh failed: ${error.message}`);
       process.exitCode = 1;

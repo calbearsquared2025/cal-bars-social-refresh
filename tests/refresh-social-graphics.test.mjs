@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchSnapshot, socialCardModel, updateRootSocialPreview } from '../scripts/refresh-social-graphics.mjs';
+import { fetchSnapshot, publicFallbackContentsDiffer, publicFallbackSnapshot, socialCardModel, updateRootSocialPreview } from '../scripts/refresh-social-graphics.mjs';
 
 test('snapshot fetch retries transient errors and preserves validation', async () => {
   let calls = 0;
@@ -124,4 +124,40 @@ test('social image URL changes when public counts change', () => {
   assert.match(first.imagePath, /^assets\/social-cards\/ucla-[a-f0-9]{10}\.png$/);
   assert.notEqual(first.imagePath, second.imagePath);
   assert.equal(first.imageUrl, `https://calgoldenbars.com/${first.imagePath}`);
+});
+
+
+test('fallback refresh ignores generatedAt-only churn but detects public data changes', () => {
+  const base = {
+    schemaVersion: '2.0',
+    venues: [{ venue_id: 'v1', name: 'One' }],
+    games: [],
+    watchParties: [],
+    fanCounts: [],
+    venueHistoryCounts: [],
+    venueSeasonCounts: [],
+    fanExperiences: [],
+    generatedAt: '2026-10-01T00:00:00Z'
+  };
+  const newerTimestamp = { ...base, generatedAt: '2026-10-01T12:00:00Z' };
+  const changed = { ...newerTimestamp, venues: [{ venue_id: 'v1', name: 'One' }, { venue_id: 'v2', name: 'Two' }] };
+  assert.equal(publicFallbackContentsDiffer(base, newerTimestamp), false);
+  assert.equal(publicFallbackContentsDiffer(base, changed), true);
+});
+
+test('fallback snapshot rejects unexpected public fields', () => {
+  const snapshot = {
+    schemaVersion: '2.0',
+    venues: [{ venue_id: 'v1', secret: 'nope' }],
+    games: [],
+    watchParties: [],
+    fanCounts: [],
+    venueHistoryCounts: [],
+    venueSeasonCounts: [],
+    fanExperiences: [],
+    generatedAt: '2026-10-01T00:00:00Z'
+  };
+  assert.throws(() => publicFallbackSnapshot(snapshot), /unexpected public fields: secret/);
+  const topLevel = { ...snapshot, venues: [], privateThing: 'nope' };
+  assert.throws(() => publicFallbackSnapshot(topLevel), /snapshot contains unexpected public fields: privateThing/);
 });

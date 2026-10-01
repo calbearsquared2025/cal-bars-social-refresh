@@ -11,7 +11,7 @@ function git(cwd, args) {
 }
 
 export function pathIsAllowed(path) {
-  return path === 'index.html' || path === 'assets/social-cards/manifest.json' || /^assets\/social-cards\/[^/]+\.png$/.test(path) || /^share\/[^/]+\/index\.html$/.test(path);
+  return path === 'index.html' || path === 'data/fallback-v2.json' || path === 'assets/social-cards/manifest.json' || /^assets\/social-cards\/[^/]+\.png$/.test(path) || /^share\/[^/]+\/index\.html$/.test(path);
 }
 
 const FINGERPRINTED_SOCIAL_IMAGE_PATTERN = /^assets\/social-cards\/[^/]+-[a-f0-9]{10}\.png$/;
@@ -59,7 +59,7 @@ export async function validatePublicDiff(siteRoot) {
   const root = resolve(siteRoot);
   const changed = statusPaths(git(root, ['status', '--porcelain=v1']));
   const disallowed = changed.filter((path) => !pathIsAllowed(path));
-  if (disallowed.length) throw new Error(`Refusing social refresh because disallowed public files changed: ${disallowed.join(', ')}`);
+  if (disallowed.length) throw new Error(`Refusing generated refresh because disallowed public files changed: ${disallowed.join(', ')}`);
   if (changed.includes('index.html')) {
     const before = git(root, ['show', 'HEAD:index.html']);
     const after = await readFile(join(root, 'index.html'), 'utf8');
@@ -76,7 +76,7 @@ if (import.meta.url === invokedPath) {
     process.exitCode = 2;
   } else {
     validatePublicDiff(siteRoot).then((changed) => {
-      console.log(changed.length ? `Validated social-only public diff: ${changed.join(', ')}` : 'No public social changes detected.');
+      console.log(changed.length ? `Validated generated public diff: ${changed.join(', ')}` : 'No generated public changes detected.');
     }).catch((error) => {
       console.error(error.message);
       process.exitCode = 1;
