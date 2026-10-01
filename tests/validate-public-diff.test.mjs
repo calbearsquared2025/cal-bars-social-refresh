@@ -5,9 +5,11 @@ import { pathIsAllowed, assertIndexDiffIsControlled, statusPaths } from '../scri
 test('public social refresh allowlist is intentionally narrow', () => {
   assert.equal(pathIsAllowed('index.html'), true);
   assert.equal(pathIsAllowed('assets/social-cards/manifest.json'), true);
+  assert.equal(pathIsAllowed('data/fallback-v2.json'), true);
   assert.equal(pathIsAllowed('assets/social-cards/ucla.png'), true);
   assert.equal(pathIsAllowed('share/ucla/index.html'), true);
   assert.equal(pathIsAllowed('js/app.mjs'), false);
+  assert.equal(pathIsAllowed('data/other.json'), false);
   assert.equal(pathIsAllowed('css/design-system.css'), false);
   assert.equal(pathIsAllowed('.github/workflows/x.yml'), false);
   assert.equal(pathIsAllowed('share/ucla/extra.txt'), false);
