@@ -145,6 +145,21 @@ test('fallback refresh ignores generatedAt-only churn but detects public data ch
   assert.equal(publicFallbackContentsDiffer(base, changed), true);
 });
 
+test('fallback snapshot preserves public retired venue slug aliases', () => {
+  const snapshot = {
+    schemaVersion: '2.0',
+    venues: [{ venue_id: 'v1', slug: 'current-route', slug_aliases: 'old-route' }],
+    games: [],
+    watchParties: [],
+    fanCounts: [],
+    venueHistoryCounts: [],
+    venueSeasonCounts: [],
+    fanExperiences: [],
+    generatedAt: '2026-10-01T00:00:00Z'
+  };
+  assert.equal(publicFallbackSnapshot(snapshot).venues[0].slug_aliases, 'old-route');
+});
+
 test('fallback snapshot rejects unexpected public fields', () => {
   const snapshot = {
     schemaVersion: '2.0',
