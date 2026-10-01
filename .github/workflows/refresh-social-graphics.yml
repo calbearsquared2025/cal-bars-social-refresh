@@ -1,4 +1,4 @@
-name: Refresh public social graphics
+name: Refresh generated public outputs
 
 on:
   schedule:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cgb-public-social-refresh
+  group: cgb-public-generated-refresh
   cancel-in-progress: false
 
 jobs:
@@ -39,10 +39,10 @@ jobs:
         shell: bash
         run: echo "sha=$(git -C .target rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Refresh generated social graphics
+      - name: Refresh generated social graphics and fallback
         run: node scripts/refresh-social-graphics.mjs .target
 
-      - name: Validate social-only public diff
+      - name: Validate generated public diff
         run: node scripts/validate-public-diff.mjs .target
 
       - name: Verify public repository has not moved
@@ -59,18 +59,18 @@ jobs:
       - name: Commit refreshed social outputs
         id: commit
         run: |
-          git -C .target add index.html assets/social-cards share
+          git -C .target add index.html assets/social-cards share data/fallback-v2.json
           if git -C .target diff --cached --quiet; then
-            echo "Social graphics already match the current public snapshot."
+            echo "Generated public outputs already match the current public snapshot."
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git -C .target config user.name "github-actions[bot]"
           git -C .target config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C .target commit -m "Refresh game social graphics"
+          git -C .target commit -m "Refresh generated public outputs"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
-      - name: Push social-only public update
+      - name: Push generated public update
         if: steps.commit.outputs.changed == 'true'
         env:
           PUBLIC_REPO_TOKEN: ${{ secrets.CGB_PUBLIC_DEPLOY_TOKEN }}
