@@ -396,14 +396,18 @@ const FALLBACK_ROW_KEYS = Object.freeze({
 });
 
 function assertAllowedObjectKeys(record, allowedKeys, path) {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) {
+    throw new Error(`Refusing fallback refresh because ${path} is not an object.`);
+  }
   const allowed = new Set(allowedKeys);
-  const unexpected = Object.keys(record || {}).filter((key) => !allowed.has(key));
+  const unexpected = Object.keys(record).filter((key) => !allowed.has(key));
   if (unexpected.length) {
     throw new Error(`Refusing fallback refresh because ${path} contains unexpected public fields: ${unexpected.join(', ')}`);
   }
 }
 
 export function publicFallbackSnapshot(snapshot) {
+  assertAllowedObjectKeys(snapshot, FALLBACK_TOP_LEVEL_KEYS, 'snapshot');
   const sanitized = {};
   for (const key of FALLBACK_TOP_LEVEL_KEYS) {
     if (!(key in snapshot)) {
