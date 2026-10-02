@@ -375,7 +375,7 @@ const FALLBACK_TOP_LEVEL_KEYS = Object.freeze([
 ]);
 const FALLBACK_ROW_KEYS = Object.freeze({
   venues: Object.freeze([
-    'venue_id', 'slug', 'name', 'address_line_1', 'address_line_2', 'city', 'region',
+    'venue_id', 'slug', 'slug_aliases', 'name', 'address_line_1', 'address_line_2', 'city', 'region',
     'postal_code', 'country_code', 'latitude', 'longitude', 'website_url', 'venue_type',
     'verification_status', 'alumni_owned', 'short_description', 'photo_url',
     'photo_caption', 'photo_credit', 'photo_credit_url', 'updated_at', 'venue_tags'
