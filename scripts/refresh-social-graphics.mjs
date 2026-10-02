@@ -387,7 +387,7 @@ const FALLBACK_ROW_KEYS = Object.freeze({
   watchParties: Object.freeze([
     'watch_party_id', 'venue_id', 'game_id', 'organizer_name', 'organizer_type',
     'official_event_url', 'source_type', 'event_start_at', 'age_policy', 'sound_status',
-    'restrictions_note', 'game_day_note', 'event_status', 'updated_at', 'feature_tags'
+    'restrictions_note', 'game_day_note', 'event_status', 'updated_at', 'feature_tags', 'rsvp_enabled'
   ]),
   fanCounts: Object.freeze(['game_id', 'venue_id', 'count']),
   venueHistoryCounts: Object.freeze(['venue_id', 'past_game_count']),
