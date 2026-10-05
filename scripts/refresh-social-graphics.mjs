@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { findBrowser } from './browser-discovery.mjs';
+import { refreshVenueRoutes } from './refresh-venue-routes.mjs';
 
 const CARD_WIDTH = 1200;
 const CARD_HEIGHT = 630;
@@ -491,7 +492,8 @@ export async function generateSocialGraphics(siteRoot, options = {}) {
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
     const updatedIndex = updateRootSocialPreview(runtime.indexHtml, manifest, runtime);
     if (updatedIndex !== runtime.indexHtml) await writeFile(join(runtime.root, 'index.html'), updatedIndex, 'utf8');
-    return { snapshot, manifest, fallbackChanged };
+    const venueRoutes = await refreshVenueRoutes(runtime, snapshot, updatedIndex);
+    return { snapshot, manifest, fallbackChanged, venueRoutes };
   } finally {
     if (temporaryDirectory) await rm(temporaryDirectory, { recursive: true, force: true });
   }
@@ -504,9 +506,9 @@ if (import.meta.url === invokedPath) {
     console.error('Usage: node scripts/refresh-social-graphics.mjs <public-site-root>');
     process.exitCode = 2;
   } else {
-    generateSocialGraphics(siteRoot).then(({ manifest, fallbackChanged }) => {
-      const fallbackNote = fallbackChanged ? ' and the deployed public fallback' : '';
-      console.log(`Refreshed ${manifest.games.length} game social card${manifest.games.length === 1 ? '' : 's'}${fallbackNote} from the public snapshot.`);
+    generateSocialGraphics(siteRoot).then(({ manifest, fallbackChanged, venueRoutes }) => {
+      const fallbackNote = fallbackChanged ? ', the deployed public fallback,' : '';
+      console.log(`Refreshed ${manifest.games.length} game social card${manifest.games.length === 1 ? '' : 's'}${fallbackNote} and ${venueRoutes.routeCount} venue route${venueRoutes.routeCount === 1 ? '' : 's'} from the public snapshot.`);
     }).catch((error) => {
       console.error(`Social refresh failed: ${error.message}`);
       process.exitCode = 1;
