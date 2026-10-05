@@ -1,12 +1,12 @@
 # Cal Bars generated public refresh
 
-Public, narrowly scoped automation for refreshing Cal Golden Bars social-card graphics and the deployed public fallback snapshot from the live public Apps Script snapshot without consuming private-repository GitHub Actions minutes.
+Public, narrowly scoped automation for refreshing Cal Golden Bars generated outputs from the live public Apps Script snapshot without consuming private-repository GitHub Actions minutes.
 
 ## Repository role
 
 This repository is **not** the Cal Golden Bars application source and does not deploy application code. The private implementation source remains `calbearsquared2025/cal-bars-source`. The public deployment mirror remains `calbearsquared2025/cal-bars`.
 
-The 12-hour workflow checks out the currently deployed public `cal-bars/main`, fetches and validates one live public Apps Script snapshot, regenerates the social outputs, and refreshes `data/fallback-v2.json` from that same snapshot when its public data changed. It ignores `generatedAt` when deciding whether the fallback needs replacement, validates that no other public file changed, rechecks the public head for races, and pushes a non-force update only when generated outputs differ. Generated card filenames include a short content fingerprint so changed counts receive a new social-image URL instead of relying on third-party cache invalidation.
+The 12-hour workflow checks out the currently deployed public `cal-bars/main`, fetches and validates one live public Apps Script snapshot, regenerates the social outputs, refreshes `data/fallback-v2.json` when its public data changed, and rebuilds the generated venue routes plus venue sitemap entries from that same snapshot. Rebuilding the complete `locations/` tree removes retired venue routes instead of leaving stale pages behind. It ignores `generatedAt` when deciding whether the fallback needs replacement, validates that generated venue routes and sitemap entries exactly match the refreshed fallback, rechecks the public head for races, and pushes a non-force update only when generated outputs differ. Generated card filenames include a short content fingerprint so changed counts receive a new social-image URL instead of relying on third-party cache invalidation.
 
 Permitted target changes are limited to:
 
@@ -15,8 +15,10 @@ Permitted target changes are limited to:
 - `share/<game>/index.html`
 - the generated social metadata and loading-cover references inside `index.html`
 - `data/fallback-v2.json`
+- `locations/<venue-or-alias>/index.html`
+- canonical venue entries in `sitemap.xml`
 
-Any other change aborts the job. The fallback refresh is restricted to the known public snapshot fields and the configured `data/fallback-v2.json` path. If the deployed social renderer version changes, automation also fails closed until this public renderer is deliberately updated; it must never silently roll a newer card design back.
+Any other change aborts the job. The fallback refresh is restricted to the known public snapshot fields and the configured `data/fallback-v2.json` path. Venue routes are rebuilt only from validated venue slugs and aliases, and validation fails if `locations/` or the sitemap does not exactly match the fallback. If the deployed social renderer version changes, automation also fails closed until this public renderer is deliberately updated; it must never silently roll a newer card design back.
 
 ## Schedule
 
