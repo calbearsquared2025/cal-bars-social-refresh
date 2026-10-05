@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { venueRouteRecords } from './refresh-venue-routes.mjs';
 
 const SOCIAL_START_MARKER = '<!-- CGB current-game social metadata: start -->';
 const SOCIAL_END_MARKER = '<!-- CGB current-game social metadata: end -->';
@@ -11,7 +12,7 @@ function git(cwd, args) {
 }
 
 export function pathIsAllowed(path) {
-  return path === 'index.html' || path === 'data/fallback-v2.json' || path === 'assets/social-cards/manifest.json' || /^assets\/social-cards\/[^/]+\.png$/.test(path) || /^share\/[^/]+\/index\.html$/.test(path);
+  return path === 'index.html' || path === 'sitemap.xml' || path === 'data/fallback-v2.json' || path === 'assets/social-cards/manifest.json' || /^assets\/social-cards\/[^/]+\.png$/.test(path) || /^share\/[^/]+\/index\.html$/.test(path) || /^locations\/[^/]+\/index\.html$/.test(path);
 }
 
 const FINGERPRINTED_SOCIAL_IMAGE_PATTERN = /^assets\/social-cards\/[^/]+-[a-f0-9]{10}\.png$/;
@@ -48,6 +49,60 @@ export function assertIndexDiffIsControlled(before, after) {
   }
 }
 
+function sortedStrings(values) {
+  return [...values].map(String).sort((a, b) => a.localeCompare(b));
+}
+
+function assertSameStrings(actual, expected, description) {
+  const actualSorted = sortedStrings(actual);
+  const expectedSorted = sortedStrings(expected);
+  if (JSON.stringify(actualSorted) !== JSON.stringify(expectedSorted)) {
+    throw new Error(`Refusing generated refresh because ${description} are out of sync. Expected [${expectedSorted.join(', ')}]; found [${actualSorted.join(', ')}].`);
+  }
+}
+
+function rootSiteOrigin(indexHtml) {
+  const canonicalTag = indexHtml.match(/<link\b[^>]*\brel=["']canonical["'][^>]*>/i)?.[0] || '';
+  const href = canonicalTag.match(/\bhref=["']([^"']+)["']/i)?.[1] || '';
+  if (!href) throw new Error('Could not resolve the root canonical URL while validating venue routes.');
+  return new URL(href).origin;
+}
+
+export async function validateVenueArtifacts(siteRoot) {
+  const root = resolve(siteRoot);
+  const [fallbackText, indexHtml, sitemap, locationEntries] = await Promise.all([
+    readFile(join(root, 'data', 'fallback-v2.json'), 'utf8'),
+    readFile(join(root, 'index.html'), 'utf8'),
+    readFile(join(root, 'sitemap.xml'), 'utf8'),
+    readdir(join(root, 'locations'), { withFileTypes: true })
+  ]);
+  const fallback = JSON.parse(fallbackText);
+  const routes = venueRouteRecords(fallback.venues || []);
+  const expectedRouteSlugs = routes.map((route) => route.slug);
+  const nonDirectories = locationEntries.filter((entry) => !entry.isDirectory()).map((entry) => entry.name);
+  if (nonDirectories.length) {
+    throw new Error(`Refusing generated refresh because locations contains non-route files: ${nonDirectories.join(', ')}`);
+  }
+  const actualRouteSlugs = locationEntries.map((entry) => entry.name);
+  assertSameStrings(actualRouteSlugs, expectedRouteSlugs, 'generated venue route directories');
+
+  for (const slug of actualRouteSlugs) {
+    const routeFiles = await readdir(join(root, 'locations', slug));
+    assertSameStrings(routeFiles, ['index.html'], `files for venue route ${slug}`);
+  }
+
+  const siteOrigin = rootSiteOrigin(indexHtml);
+  const locationPrefix = `${siteOrigin}/locations/`;
+  const sitemapLocations = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)]
+    .map((match) => match[1])
+    .filter((value) => value.startsWith(locationPrefix));
+  const expectedSitemapLocations = (fallback.venues || []).map((venue) => (
+    new URL('locations/' + encodeURIComponent(venue.slug) + '/', siteOrigin + '/').href
+  ));
+  assertSameStrings(sitemapLocations, expectedSitemapLocations, 'canonical venue sitemap entries');
+  return { routeCount: expectedRouteSlugs.length, canonicalCount: expectedSitemapLocations.length };
+}
+
 export function statusPaths(porcelain) {
   return String(porcelain || '')
     .split(/\r?\n/)
@@ -65,6 +120,7 @@ export async function validatePublicDiff(siteRoot) {
     const after = await readFile(join(root, 'index.html'), 'utf8');
     assertIndexDiffIsControlled(`${before}\n`, after);
   }
+  await validateVenueArtifacts(root);
   return changed;
 }
 

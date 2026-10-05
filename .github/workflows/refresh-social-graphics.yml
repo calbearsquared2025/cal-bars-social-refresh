@@ -59,7 +59,7 @@ jobs:
       - name: Commit refreshed social outputs
         id: commit
         run: |
-          git -C .target add index.html assets/social-cards share data/fallback-v2.json
+          git -C .target add index.html sitemap.xml locations assets/social-cards share data/fallback-v2.json
           if git -C .target diff --cached --quiet; then
             echo "Generated public outputs already match the current public snapshot."
             echo "changed=false" >> "$GITHUB_OUTPUT"
