@@ -382,7 +382,7 @@ const FALLBACK_ROW_KEYS = Object.freeze({
     'photo_caption', 'photo_credit', 'photo_credit_url', 'updated_at', 'venue_tags'
   ]),
   games: Object.freeze([
-    'game_id', 'season', 'schedule_order', 'opponent_name', 'home_away',
+    'game_id', 'season', 'schedule_order', 'opponent_name', 'game_title', 'home_away',
     'game_date', 'kickoff_at', 'kickoff_status', 'game_status', 'updated_at'
   ]),
   watchParties: Object.freeze([

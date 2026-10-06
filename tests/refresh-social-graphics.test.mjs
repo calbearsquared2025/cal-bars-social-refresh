@@ -131,7 +131,7 @@ test('fallback refresh ignores generatedAt-only churn but detects public data ch
   const base = {
     schemaVersion: '2.0',
     venues: [{ venue_id: 'v1', name: 'One' }],
-    games: [],
+    games: [{ game_id: 'g1', opponent_name: 'UCLA', game_title: 'The Big Game' }],
     watchParties: [],
     fanCounts: [],
     venueHistoryCounts: [],
