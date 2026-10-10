@@ -24,13 +24,15 @@ Any other change aborts the job. The fallback refresh is restricted to the known
 
 `Refresh generated public outputs` runs every 12 hours at minute 17 and can also be run manually.
 
-GitHub automatically disables scheduled workflows in inactive public repositories after 60 days. `Keep scheduled refresh active` therefore creates one empty repository commit on the 3rd of each month. That heartbeat has write access only to this automation repository and never receives the deployment PAT.
+GitHub automatically disables scheduled workflows in inactive public repositories after 60 days. `Keep scheduled refresh active` therefore creates one empty repository commit on the 3rd of each month. That heartbeat has write access only to this automation repository and never receives the deploy key.
 
-## Required secret
+## Required SSH deploy key
 
-Repository secret `CGB_PUBLIC_DEPLOY_TOKEN`: a fine-grained GitHub PAT scoped only to `calbearsquared2025/cal-bars` with **Contents: Read and write**. No Workflows permission is needed.
+The refresh publisher uses a **dedicated, write-enabled SSH deploy key** registered on `calbearsquared2025/cal-bars` (**Settings → Deploy keys**) as `CGB Social Refresh (SSH)`. Its matching private key is stored as the Actions repository secret `CGB_SOCIAL_REFRESH_SSH_KEY` on **`cal-bars-social-refresh`**, not `cal-bars` or `cal-bars-source`. This key must be distinct from the existing `CGB Public Deploy (SSH)` key, so each automation's access can be revoked independently.
 
-The deployment secret is provided only to the final push step. Public checkout, snapshot retrieval, rendering, validation, and concurrency checks do not receive it. Pull-request tests never receive it.
+The SSH private key is available **only in the conditional final push step**. The checkout remains anonymous HTTPS; snapshot retrieval, rendering, validation, and pull-request tests cannot access the credential. The push uses a pinned GitHub-published SSH host key, strict host verification, and a temporary key file removed on step exit. No personal access token or additional dependency is required.
+
+**Cutover:** Verify a real `Refresh generated public outputs` run on `main` performs a successful **Push generated public update** step using the SSH key before deleting the old `CGB_PUBLIC_DEPLOY_TOKEN` secret and revoking the old personal access token. A successful run where the push step was skipped does **not** verify SSH write access. If a run generates no changes, leave the old credential in place until a later verified push. SSH deploy keys do not expire automatically but should be revoked and rotated if compromised.
 
 ## Local checks
 
