@@ -73,10 +73,19 @@ jobs:
       - name: Push generated public update
         if: steps.commit.outputs.changed == 'true'
         env:
-          PUBLIC_REPO_TOKEN: ${{ secrets.CGB_PUBLIC_DEPLOY_TOKEN }}
+          SOCIAL_REFRESH_SSH_KEY: ${{ secrets.CGB_SOCIAL_REFRESH_SSH_KEY }}
         run: |
-          if [ -z "$PUBLIC_REPO_TOKEN" ]; then
-            echo "::error::Missing CGB_PUBLIC_DEPLOY_TOKEN repository secret."
+          set -euo pipefail
+          if [ -z "$SOCIAL_REFRESH_SSH_KEY" ]; then
+            echo "::error::Missing CGB_SOCIAL_REFRESH_SSH_KEY repository secret."
             exit 1
           fi
-          git -C .target push "https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/calbearsquared2025/cal-bars.git" HEAD:main
+          umask 077
+          ssh_dir="$(mktemp -d)"
+          trap 'rm -rf "$ssh_dir"' EXIT
+          printf '%s\n' "$SOCIAL_REFRESH_SSH_KEY" > "$ssh_dir/deploy_key"
+          # GitHub's published Ed25519 host key; do not trust unauthenticated ssh-keyscan output.
+          # https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
+          printf '%s\n' 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$ssh_dir/known_hosts"
+          GIT_SSH_COMMAND="ssh -i $ssh_dir/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$ssh_dir/known_hosts" \
+            git -C .target push git@github.com:calbearsquared2025/cal-bars.git HEAD:main
