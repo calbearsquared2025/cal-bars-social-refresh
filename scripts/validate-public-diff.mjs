@@ -15,37 +15,47 @@ export function pathIsAllowed(path) {
   return path === 'index.html' || path === 'sitemap.xml' || path === 'data/fallback-v2.json' || path === 'assets/social-cards/manifest.json' || /^assets\/social-cards\/[^/]+\.png$/.test(path) || /^share\/[^/]+\/index\.html$/.test(path) || /^locations\/[^/]+\/index\.html$/.test(path);
 }
 
-const FINGERPRINTED_SOCIAL_IMAGE_PATTERN = /^assets\/social-cards\/[^/]+-[a-f0-9]{10}\.png$/;
-const PRELOAD_PATTERN = /(<link\b[^>]*\bid=["']cgb-loading-cover-preload["'][^>]*\bhref=")([^"]*)(")/i;
-const IMAGE_PATTERN = /(<img\b[^>]*\bid=["']map-fallback-card["'][^>]*\bsrc=")([^"]*)(")/i;
+const COVER_START = '<!-- CGB loading-cover data: start -->';
+const COVER_END = '<!-- CGB loading-cover data: end -->';
+const COVER_DATA_PATTERN = new RegExp(COVER_START + '[\\s\\S]*?' + COVER_END);
+const FINGERPRINTED_SOCIAL_IMAGE_PATTERN = /^assets\/social-cards\/[a-z0-9-]+-[a-f0-9]{10}\.png$/;
 
-function loadingCoverReferences(html) {
-  const preload = html.match(PRELOAD_PATTERN)?.[2] || '';
-  const image = html.match(IMAGE_PATTERN)?.[2] || '';
-  if (!preload || !image) throw new Error('index.html is missing the generated loading-cover references.');
-  return { preload, image };
+function loadingCoverData(html) {
+  const block = html.match(COVER_DATA_PATTERN)?.[0];
+  if (!block) throw new Error('index.html is missing generated first-paint loading-cover data.');
+  const json = block.match(/<script type="application\/json" id="cgb-loading-cover-data">([^<]*)<\/script>/)?.[1];
+  if (!json) throw new Error('index.html is missing safe loading-cover JSON.');
+  const data = JSON.parse(json);
+  if (!Array.isArray(data.games) || typeof data.timeZone !== 'string' ||
+      typeof data.fallbackImage !== 'string') {
+    throw new Error('Invalid generated first-paint loading-cover data.');
+  }
+  const seen = new Set();
+  for (const game of data.games) {
+    if (typeof game.slug !== 'string' || typeof game.date !== 'string' ||
+        typeof game.id !== 'string' || seen.has(game.id) ||
+        !['upcoming', 'completed', 'postponed', 'cancelled'].includes(game.status) ||
+        !FINGERPRINTED_SOCIAL_IMAGE_PATTERN.test(game.image)) {
+      throw new Error('Generated loading-cover entries must be public, unique, and fingerprinted.');
+    }
+    seen.add(game.id);
+  }
+  return data;
 }
 
 function normalizeControlledIndexRegions(html) {
-  const blockPattern = new RegExp(`${SOCIAL_START_MARKER}[\\s\\S]*?${SOCIAL_END_MARKER}`);
-  if (!blockPattern.test(html)) throw new Error('index.html is missing the generated social metadata markers.');
-  loadingCoverReferences(html);
+  const social = new RegExp(SOCIAL_START_MARKER + '[\\s\\S]*?' + SOCIAL_END_MARKER);
+  if (!social.test(html)) throw new Error('index.html is missing the generated social metadata markers.');
+  loadingCoverData(html);
   return html
-    .replace(blockPattern, `${SOCIAL_START_MARKER}\n${SOCIAL_END_MARKER}`)
-    .replace(PRELOAD_PATTERN, '$1__CGB_LOADING_COVER__$3')
-    .replace(IMAGE_PATTERN, '$1__CGB_LOADING_COVER__$3');
+    .replace(social, SOCIAL_START_MARKER + '\n' + SOCIAL_END_MARKER)
+    .replace(COVER_DATA_PATTERN, COVER_START + '\n' + COVER_END);
 }
 
 export function assertIndexDiffIsControlled(before, after) {
-  const { preload, image } = loadingCoverReferences(after);
-  if (!FINGERPRINTED_SOCIAL_IMAGE_PATTERN.test(preload) || !FINGERPRINTED_SOCIAL_IMAGE_PATTERN.test(image)) {
-    throw new Error('Generated loading-cover references must use fingerprinted social-card images.');
-  }
-  if (preload !== image) {
-    throw new Error('Generated loading-cover preload and visible image must stay synchronized.');
-  }
+  loadingCoverData(after);
   if (normalizeControlledIndexRegions(before) !== normalizeControlledIndexRegions(after)) {
-    throw new Error('index.html changed outside the generated social metadata and loading-cover references.');
+    throw new Error('index.html changed outside the generated social metadata and loading-cover data.');
   }
 }
 
