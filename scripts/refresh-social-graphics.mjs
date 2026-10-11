@@ -312,19 +312,31 @@ function socialMetadataBlock(entry, runtime) {
   return `${SOCIAL_START_MARKER}\n  <meta property="og:title" content="${escapeHtml(title)}">\n  <meta property="og:description" content="${escapeHtml(description)}">\n  <meta property="og:image" content="${escapeHtml(imageUrl)}">\n  <meta property="og:image:width" content="1200">\n  <meta property="og:image:height" content="630">\n  <meta property="og:url" content="${runtime.siteOrigin}/">\n  <meta property="og:type" content="website">\n  <meta name="twitter:card" content="summary_large_image">\n  <meta name="twitter:title" content="${escapeHtml(title)}">\n  <meta name="twitter:description" content="${escapeHtml(description)}">\n  <meta name="twitter:image" content="${escapeHtml(imageUrl)}">\n  ${SOCIAL_END_MARKER}`;
 }
 
-export function updateLoadingCover(html, entry) {
-  const imagePath = escapeHtml(entry.image);
-  const preloadPattern = /(<link\b[^>]*\bid=["']cgb-loading-cover-preload["'][^>]*\bhref=")[^"]*(")/i;
-  const imagePattern = /(<img\b[^>]*\bid=["']map-fallback-card["'][^>]*\bsrc=")[^"]*(")/i;
-  if (!preloadPattern.test(html) || !imagePattern.test(html)) {
-    throw new Error('Could not find the current-game loading cover hooks in index.html.');
-  }
-  return html
-    .replace(preloadPattern, `$1${imagePath}$2`)
-    .replace(imagePattern, `$1${imagePath}$2`);
+const COVER_START = '<!-- CGB loading-cover data: start -->';
+const COVER_END = '<!-- CGB loading-cover data: end -->';
+
+export function updateLoadingCoverData(html, manifest, runtime, snapshot) {
+  const gameById = new Map((snapshot?.games || []).map((game) => [game.game_id, game]));
+  const games = (manifest?.games || []).flatMap((entry) => {
+    const game = gameById.get(entry.game_id);
+    const image = String(entry.image || '');
+    if (!game || !/^assets\/social-cards\/[a-z0-9-]+\.png$/.test(image)) return [];
+    return [{ id: game.game_id, slug: entry.slug, date: game.game_date,
+      status: game.game_status, order: game.schedule_order, image }];
+  });
+  const payload = JSON.stringify({
+    timeZone: runtime.config.schedule.homeTimeZone,
+    fallbackImage: runtime.config.brand.assets.loadingFallback,
+    games
+  }).replaceAll('<', '\\u003c');
+  const block = COVER_START + '\n  <script type="application/json" id="cgb-loading-cover-data">' +
+    payload + '</script>\n  ' + COVER_END;
+  const pattern = new RegExp(COVER_START + '[\\s\\S]*?' + COVER_END);
+  if (!pattern.test(html)) throw new Error('Could not find generated first-paint loading-cover data.');
+  return html.replace(pattern, block);
 }
 
-export function updateRootSocialPreview(html, manifest, runtime) {
+export function updateRootSocialPreview(html, manifest, runtime, snapshot) {
   const slug = String(manifest?.default_game_slug || '').trim();
   const entry = (manifest.games || []).find((item) => item?.slug === slug);
   if (!entry) throw new Error(`Generated social-card manifest has no entry for default game: ${slug || '(missing)'}`);
@@ -332,7 +344,7 @@ export function updateRootSocialPreview(html, manifest, runtime) {
   const generatedPattern = new RegExp(`${SOCIAL_START_MARKER}[\\s\\S]*?${SOCIAL_END_MARKER}`);
   if (!generatedPattern.test(html)) throw new Error('Could not find the generated root social metadata block in index.html.');
   const metadataUpdated = html.replace(generatedPattern, block);
-  return updateLoadingCover(metadataUpdated, entry);
+  return updateLoadingCoverData(metadataUpdated, manifest, runtime, snapshot);
 }
 
 async function readPreviousManifest(manifestPath) {
@@ -490,7 +502,7 @@ export async function generateSocialGraphics(siteRoot, options = {}) {
     await removeObsoleteOutputs(previousManifest, models, runtime, shareRoot);
     const manifest = buildSocialManifest(snapshot, models, runtime);
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
-    const updatedIndex = updateRootSocialPreview(runtime.indexHtml, manifest, runtime);
+    const updatedIndex = updateRootSocialPreview(runtime.indexHtml, manifest, runtime, snapshot);
     if (updatedIndex !== runtime.indexHtml) await writeFile(join(runtime.root, 'index.html'), updatedIndex, 'utf8');
     const venueRoutes = await refreshVenueRoutes(runtime, snapshot, updatedIndex);
     return { snapshot, manifest, fallbackChanged, venueRoutes };

@@ -64,36 +64,42 @@ test('snapshot fetch does not retry permanent client errors', async () => {
   assert.equal(calls, 1);
 });
 
-test('root preview keeps the visible loading cover synchronized with the default game', () => {
+test('root preview publishes an early-selection schedule without rewriting the visible cover', () => {
   const runtime = {
     siteOrigin: 'https://calgoldenbars.com',
     config: {
       identity: { productName: 'Cal Golden Bars' },
-      copy: { findCrowd: 'Find your Cal crowd' }
+      copy: { findCrowd: 'Find your Cal crowd' },
+      brand: { assets: { loadingFallback: 'assets/cgb-loading-fallback.svg' } },
+      schedule: { homeTimeZone: 'America/Los_Angeles' }
     }
   };
   const manifest = {
     default_game_slug: 'unlv',
-    games: [{
-      slug: 'unlv',
-      title: 'Cal at UNLV',
-      locations_mapped: 45,
-      watch_parties: 10,
-      image: 'assets/social-cards/unlv-50d9a6c596.png'
-    }]
+    games: [{ game_id: 'game_unlv', slug: 'unlv', title: 'Cal at UNLV',
+      locations_mapped: 45, watch_parties: 10,
+      image: 'assets/social-cards/unlv-50d9a6c596.png' }]
   };
-  const html = `<head>
-<!-- CGB current-game social metadata: start -->old<!-- CGB current-game social metadata: end -->
-<link id="cgb-loading-cover-preload" rel="preload" as="image" href="assets/social-cards/clemson-523e8f106d.png">
-</head><body>
-<img id="map-fallback-card" src="assets/social-cards/clemson-523e8f106d.png" alt="">
-</body>`;
-  const updated = updateRootSocialPreview(html, manifest, runtime);
-
+  const snapshot = { games: [{ game_id: 'game_unlv', game_date: '2026-10-11',
+    game_status: 'upcoming', schedule_order: 7 }] };
+  const html = '<head>\n<!-- CGB current-game social metadata: start -->old<!-- CGB current-game social metadata: end -->\n' +
+    '<!-- CGB loading-cover data: start -->\n' +
+    '<script type="application/json" id="cgb-loading-cover-data">{"games":[]}</script>\n' +
+    '<!-- CGB loading-cover data: end -->\n' +
+    '<link id="cgb-loading-cover-preload" rel="preload" as="image">\n</head><body>' +
+    '<img id="map-fallback-card" alt=""><main>same</main></body>';
+  const updated = updateRootSocialPreview(html, manifest, runtime, snapshot);
   assert.match(updated, /<meta property="og:title" content="Cal Golden Bars · Cal at UNLV">/);
-  assert.match(updated, /id="cgb-loading-cover-preload"[^>]*href="assets\/social-cards\/unlv-50d9a6c596\.png"/i);
-  assert.match(updated, /id="map-fallback-card"[^>]*src="assets\/social-cards\/unlv-50d9a6c596\.png"/i);
-  assert.doesNotMatch(updated, /clemson-523e8f106d\.png/);
+  const data = JSON.parse(updated.match(/id="cgb-loading-cover-data">([^<]*)<\/script>/)[1]);
+  assert.equal(data.timeZone, 'America/Los_Angeles');
+  assert.deepEqual(data.games, [{
+    id: 'game_unlv', slug: 'unlv', date: '2026-10-11',
+    status: 'upcoming', order: 7,
+    image: 'assets/social-cards/unlv-50d9a6c596.png'
+  }]);
+  assert.doesNotMatch(updated, /id="map-fallback-card"[^>]*src=/);
+  assert.doesNotMatch(updated, /id="cgb-loading-cover-preload"[^>]*href=/);
+  assert.match(updated, /<main>same<\/main>/);
 });
 
 test('automation contract keeps the current renderer version explicit', async () => {
