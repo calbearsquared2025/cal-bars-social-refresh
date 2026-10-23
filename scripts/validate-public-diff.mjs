@@ -120,9 +120,17 @@ export function statusPaths(porcelain) {
     .map((line) => line.slice(3).trim());
 }
 
+// Git normally collapses a wholly untracked directory to "?? locations/slug/".
+// Expand it to actual files so the strict generated-index allowlist can evaluate
+// each path without permitting arbitrary files within a new route directory.
+export function changedPublicPaths(siteRoot) {
+  const root = resolve(siteRoot);
+  return statusPaths(git(root, ['status', '--porcelain=v1', '--untracked-files=all']));
+}
+
 export async function validatePublicDiff(siteRoot) {
   const root = resolve(siteRoot);
-  const changed = statusPaths(git(root, ['status', '--porcelain=v1']));
+  const changed = changedPublicPaths(root);
   const disallowed = changed.filter((path) => !pathIsAllowed(path));
   if (disallowed.length) throw new Error(`Refusing generated refresh because disallowed public files changed: ${disallowed.join(', ')}`);
   if (changed.includes('index.html')) {
