@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pathIsAllowed, assertIndexDiffIsControlled, statusPaths } from '../scripts/validate-public-diff.mjs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathIsAllowed, assertIndexDiffIsControlled, statusPaths, changedPublicPaths } from '../scripts/validate-public-diff.mjs';
 
 test('public social refresh allowlist is intentionally narrow', () => {
   assert.equal(pathIsAllowed('index.html'), true);
@@ -41,4 +45,28 @@ test('porcelain parsing preserves paths for unstaged deletions and untracked fil
     statusPaths(' D assets/social-cards/old.png\n?? assets/social-cards/new.png\n'),
     ['assets/social-cards/old.png', 'assets/social-cards/new.png']
   );
+});
+
+
+test('new generated venue directories are validated as individual files, never allowed as whole folders', () => {
+  const root = mkdtempSync(join(tmpdir(), 'cgb-public-diff-'));
+  try {
+    execFileSync('git', ['init', '-q', root]);
+    const newRoute = join(root, 'locations', 'la-victoria-cocina-mexicana-santa-ana');
+    mkdirSync(newRoute, { recursive: true });
+    writeFileSync(join(newRoute, 'index.html'), '<!doctype html><title>Venue</title>');
+    writeFileSync(join(newRoute, 'unexpected.txt'), 'not a generated venue file');
+
+    const changed = changedPublicPaths(root);
+    assert.deepEqual(changed.sort(), [
+      'locations/la-victoria-cocina-mexicana-santa-ana/index.html',
+      'locations/la-victoria-cocina-mexicana-santa-ana/unexpected.txt'
+    ]);
+    assert.equal(changed.filter((path) => !pathIsAllowed(path)).length, 1);
+    assert.equal(pathIsAllowed(changed[0]), true);
+    assert.equal(pathIsAllowed(changed[1]), false);
+    assert.equal(pathIsAllowed('locations/la-victoria-cocina-mexicana-santa-ana/'), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
