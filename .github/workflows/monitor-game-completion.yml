@@ -1,0 +1,73 @@
+name: Monitor game auto-completion
+
+on:
+  # Independent check in the public repository: 00:30 UTC is 5:30pm PDT
+  # or 4:30pm PST, with a second daily check for late kickoffs.
+  schedule:
+    - cron: '30 0,12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: cgb-game-completion-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Read live public game status
+        run: |
+          node scripts/check-game-closure.mjs 2>&1 | tee "$RUNNER_TEMP/game-closure-check.txt"
+
+      - name: Open incident on an overdue or unverifiable status
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INCIDENT_TITLE: 'CGB: game auto-completion check failed'
+        shell: bash
+        run: |
+          set -euo pipefail
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title \
+            | jq -r --arg title "$INCIDENT_TITLE" '.[] | select(.title == $title) | .number' | head -n 1)"
+          if [ -z "$existing" ]; then
+            {
+              echo '@calbearsquared2025 The independent CGB game-completion check failed.'
+              echo
+              echo 'The monitor reads only the public CGB snapshot; it did not change Games, triggers, or deployments.'
+              echo
+              cat "$RUNNER_TEMP/game-closure-check.txt"
+              echo
+              echo "Workflow: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+              echo 'Check the production Apps Script trigger and account authorization.'
+            } > "$RUNNER_TEMP/game-closure-incident.md"
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$INCIDENT_TITLE" \
+              --body-file "$RUNNER_TEMP/game-closure-incident.md"
+          else
+            echo "Monitor incident already open: #$existing; no duplicate issue created."
+          fi
+
+      - name: Close the incident after a successful check
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INCIDENT_TITLE: 'CGB: game auto-completion check failed'
+        shell: bash
+        run: |
+          set -euo pipefail
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title \
+            | jq -r --arg title "$INCIDENT_TITLE" '.[] | select(.title == $title) | .number' | head -n 1)"
+          if [ -n "$existing" ]; then
+            gh issue close "$existing" --repo "$GITHUB_REPOSITORY" --reason completed \
+              --comment 'The latest live check found no overdue games. Closed automatically; verify the Apps Script trigger remains enabled.'
+          fi
