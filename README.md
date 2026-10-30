@@ -47,3 +47,12 @@ To exercise the generator against a local checkout of the public deployment:
 node scripts/refresh-social-graphics.mjs /path/to/cal-bars
 node scripts/validate-public-diff.mjs /path/to/cal-bars
 ```
+
+
+## Independent game-completion monitor
+
+The `Monitor game auto-completion` GitHub Actions workflow reads the **live public Apps Script snapshot**, independently of the Google hourly trigger. It does not access the private Google Sheet or modify Games. It runs twice daily (00:30 and 12:30 UTC) from this public repository and supports a manual workflow dispatch. Standard public-repository GitHub-hosted Actions minutes are free; no additional credentials or paid services are needed.
+
+It flags games still `upcoming` seven hours after a confirmed kickoff (six-hour cutoff plus one hour for the existing hourly Apps Script task), or at 07:00 on the following school-local day for TBD kickoff games. It also fails if the public snapshot is invalid, stale, or unavailable. A failed check opens one GitHub issue mentioning @calbearsquared2025 using the built-in repository token; a subsequent healthy check closes the issue automatically. A failed check also marks the workflow red. GitHub notification preferences must permit issue mentions and/or Actions failure notifications—issue creation does not guarantee email if notifications are muted.
+
+This watchdog **detects** a disabled or failing trigger; it does not restore triggers or close games. To inspect it, open **Actions → Monitor game auto-completion**. Any generated incident includes only public game information and must never expose the private workbook or form submissions. A static fallback snapshot is intentionally not used because it can lag the canonical live state.
