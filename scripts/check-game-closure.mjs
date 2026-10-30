@@ -14,12 +14,12 @@ function localTimestamp(date, timeZone = HOME_TIME_ZONE) {
     hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
   }).formatToParts(date);
   const v = Object.fromEntries(parts.map(({type, value}) => [type, value]));
-  return `${{v.year}-${{v.month}-${{v.day} ${{v.hour}:${{v.minute}`;
+  return `${v.year}-${v.month}-${v.day} ${v.hour}:${v.minute}`;
 }
 
 function dateAfter(gameDate) {
   if (typeof gameDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(gameDate)) return null;
-  const day = new Date(`${{gameDate}T00:00:00Z`);
+  const day = new Date(`${gameDate}T00:00:00Z`);
   if (Number.isNaN(day.getTime()) || day.toISOString().slice(0, 10) !== gameDate) return null;
   day.setUTCDate(day.getUTCDate() + 1);
   return day.toISOString().slice(0, 10);
@@ -37,9 +37,9 @@ function elapsedCutoff(game, now, timeZone) {
     const nextDate = dateAfter(game.game_date);
     if (!nextDate) return { invalid: 'TBD game_date is missing or invalid' };
     // Existing trigger completes at 06:00 next school-local day, plus one hour grace.
-    const localCutoff = `${{nextDate} 07:00`;
+    const localCutoff = `${nextDate} 07:00`;
     return { overdue: localTimestamp(now, timeZone) >= localCutoff,
-      cutoff: `${{localCutoff} ${{timeZone}` };
+      cutoff: `${localCutoff} ${timeZone}` };
   }
   return { invalid: 'kickoff_status is not confirmed or tbd' };
 }
@@ -65,8 +65,8 @@ export function checkGameCompletion(snapshot, now = new Date(), {
     const opponent = String(game.opponent_name || '(unknown opponent)').slice(0, 100);
     const date = String(game.game_date || '(missing date)').slice(0, 40);
     const cutoff = elapsedCutoff(game, now, timeZone);
-    if (cutoff.invalid) problems.push(`${{opponent} (${{date}): ${{cutoff.invalid}`);
-    else if (cutoff.overdue) problems.push(`${{opponent} (${{date}) remains upcoming past ${{cutoff.cutoff}`);
+    if (cutoff.invalid) problems.push(`${opponent} (${date}): ${cutoff.invalid}`);
+    else if (cutoff.overdue) problems.push(`${opponent} (${date}) remains upcoming past ${cutoff.cutoff}`);
   }
   return { problems, checked: snapshot.games.length, upcoming };
 }
@@ -89,7 +89,7 @@ async function loadLiveSnapshot(fetchImpl = fetch) {
   const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
     const site = await fetchImpl(SITE_URL, { signal: controller.signal, redirect: 'follow', cache: 'no-store' });
-    if (!site.ok) throw new Error(`Live site returned HTTP ${{site.status}`);
+    if (!site.ok) throw new Error(`Live site returned HTTP ${site.status}`);
     const endpoint = extractPublicEndpoint(await site.text());
     // Reuse the public-refresh repository's existing retry handling.
     const { fetchSnapshot } = await import('./refresh-social-graphics.mjs');
@@ -110,14 +110,14 @@ async function main() {
     const result = await runCheck();
     if (result.problems.length) {
       console.error('CGB GAME COMPLETION ALERT:');
-      for (const problem of result.problems) console.error(`- ${{problem}`);
+      for (const problem of result.problems) console.error(`- ${problem}`);
       console.error('The existing Google Apps Script scheduler may be disabled or failing. This monitor does not change data.');
       process.exitCode = 1;
       return;
     }
-    console.log(`CGB game-completion check OK: ${{result.checked} games, ${{result.upcoming} upcoming, none overdue.`);
+    console.log(`CGB game-completion check OK: ${result.checked} games, ${result.upcoming} upcoming, none overdue.`);
   } catch (error) {
-    console.error(`CGB GAME COMPLETION MONITOR ERROR: ${{error.message}`);
+    console.error(`CGB GAME COMPLETION MONITOR ERROR: ${error.message}`);
     console.error('Could not verify live completion. Inspect the public endpoint and Google Apps Script account status.');
     process.exitCode = 1;
   }
